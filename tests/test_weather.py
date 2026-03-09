@@ -9,6 +9,7 @@ from nd75_screen.widgets.weather import (
     fetch_metar,
     parse_weather_icon,
     render_weather,
+    render_weather_frames,
     render_error_screen,
 )
 
@@ -144,6 +145,23 @@ def test_render_weather_metric_shows_celsius(sample_metar):
 
 
 # ---- render_error_screen ----
+
+
+def test_render_weather_frames_returns_correct_count(sample_metar):
+    """render_weather_frames returns the requested number of frames."""
+    frames = render_weather_frames(sample_metar, num_frames=8)
+    assert len(frames) == 8
+    for img in frames:
+        assert img.size == (SCREEN_WIDTH, SCREEN_HEIGHT)
+        assert img.mode == "RGB"
+
+
+def test_render_weather_frames_differ(sample_metar):
+    """Animation frames should not all be identical."""
+    frames = render_weather_frames(sample_metar, num_frames=4)
+    # At least two frames should differ (animated icon region changes)
+    pixel_sets = [f.tobytes() for f in frames]
+    assert len(set(pixel_sets)) > 1
 
 
 def test_render_error_screen_returns_correct_image():

@@ -31,8 +31,8 @@ class ND75Device:
     def __init__(self) -> None:
         self._cmd_path: bytes | None = None
         self._data_path: bytes | None = None
-        self._cmd_dev: hid.Device | None = None
-        self._data_dev: hid.Device | None = None
+        self._cmd_dev: hid.device | None = None
+        self._data_dev: hid.device | None = None
 
     # -- Context manager -----------------------------------------------------
 
@@ -70,8 +70,10 @@ class ND75Device:
         if self._cmd_path is None or self._data_path is None:
             self._discover()
 
-        self._cmd_dev = hid.Device(path=self._cmd_path)
-        self._data_dev = hid.Device(path=self._data_path)
+        self._cmd_dev = hid.device()
+        self._cmd_dev.open_path(self._cmd_path)
+        self._data_dev = hid.device()
+        self._data_dev.open_path(self._data_path)
 
     def close(self) -> None:
         """Close both HID devices and reset internal state."""
@@ -133,10 +135,8 @@ class ND75Device:
         Args:
             chunks: Exactly NUM_CHUNKS (16) byte-strings of raw pixel data.
         """
-        if len(chunks) != NUM_CHUNKS:
-            raise ValueError(
-                f"Expected exactly {NUM_CHUNKS} chunks, got {len(chunks)}"
-            )
+        if not chunks:
+            raise ValueError("chunks must not be empty")
 
         # Lazy open
         if self._cmd_dev is None or self._data_dev is None:

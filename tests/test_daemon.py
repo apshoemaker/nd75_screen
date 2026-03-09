@@ -32,12 +32,13 @@ def mock_deps():
 
     with (
         patch("nd75_screen.daemon.fetch_metar", return_value=metar) as m_fetch,
-        patch("nd75_screen.daemon.render_weather") as m_render,
+        patch("nd75_screen.daemon.render_weather_frames") as m_render,
         patch("nd75_screen.daemon.render_error_screen") as m_render_err,
-        patch("nd75_screen.daemon.render_to_chunks", return_value=[b"\x00" * 4096] * 16) as m_chunks,
+        patch("nd75_screen.daemon.render_frames_to_chunks", return_value=[b"\x00" * 4096] * 16) as m_chunks,
+        patch("nd75_screen.daemon.render_to_chunks", return_value=[b"\x00" * 4096] * 16),
         patch("nd75_screen.daemon.ND75Device") as m_device_cls,
     ):
-        m_render.return_value = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT))
+        m_render.return_value = [Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT))]
         m_render_err.return_value = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT))
         m_device = MagicMock()
         m_device_cls.return_value.__enter__ = MagicMock(return_value=m_device)

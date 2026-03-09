@@ -11,7 +11,7 @@ from nd75_screen import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
 )
-from nd75_screen.renderer import image_to_rgb565, render_to_chunks, rgb565_to_chunks
+from nd75_screen.renderer import image_to_rgb565, render_to_chunks, rgb565_to_chunks, render_frames_to_chunks
 
 
 # ---- RGB565 known-value tests ----
@@ -138,5 +138,36 @@ def test_render_to_chunks_returns_16_chunks():
     img = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (255, 255, 255))
     chunks = render_to_chunks(img)
     assert len(chunks) == NUM_CHUNKS
+    for chunk in chunks:
+        assert len(chunk) == CHUNK_SIZE
+
+
+# ---- Multi-frame ----
+
+
+def test_multi_frame_chunk_count_scales():
+    """Multiple frames should produce more chunks than a single frame."""
+    pixel_data = b"\x00" * (FRAME_SIZE * 4)
+    chunks = rgb565_to_chunks(pixel_data, frame_count=4)
+    expected = -(-((HEADER_SIZE + FRAME_SIZE * 4)) // CHUNK_SIZE)
+    assert len(chunks) == expected
+    for chunk in chunks:
+        assert len(chunk) == CHUNK_SIZE
+
+
+def test_multi_frame_header_has_correct_count():
+    """Header byte[0] should reflect the frame count."""
+    pixel_data = b"\x00" * (FRAME_SIZE * 8)
+    chunks = rgb565_to_chunks(pixel_data, frame_count=8)
+    assert chunks[0][0] == 8
+
+
+def test_render_frames_to_chunks():
+    """render_frames_to_chunks packs multiple images into wire chunks."""
+    frames = [Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (i * 30, 0, 0)) for i in range(4)]
+    chunks = render_frames_to_chunks(frames)
+    # Header byte should be 4
+    assert chunks[0][0] == 4
+    # All chunks should be 4096 bytes
     for chunk in chunks:
         assert len(chunk) == CHUNK_SIZE

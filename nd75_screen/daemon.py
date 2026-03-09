@@ -7,8 +7,8 @@ import threading
 
 from nd75_screen import ND75Error, WeatherFetchError
 from nd75_screen.hid import ND75Device
-from nd75_screen.renderer import render_to_chunks
-from nd75_screen.widgets.weather import fetch_metar, render_weather, render_error_screen
+from nd75_screen.renderer import render_to_chunks, render_frames_to_chunks
+from nd75_screen.widgets.weather import fetch_metar, render_weather_frames, render_error_screen
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +36,8 @@ def run_loop(
             # Fetch and render
             try:
                 metar = fetch_metar(station)
-                img = render_weather(metar, units)
-                chunks = render_to_chunks(img)
+                frames = render_weather_frames(metar, units)
+                chunks = render_frames_to_chunks(frames)
                 cached_chunks = chunks
             except WeatherFetchError as exc:
                 log.warning("Weather fetch failed: %s", exc)

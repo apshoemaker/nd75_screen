@@ -37,8 +37,10 @@ def image_to_rgb565(img: Image.Image) -> bytes:
 
 def rgb565_to_chunks(pixel_data: bytes, frame_count: int = 1) -> list[bytes]:
     """Build a 256-byte header, prepend it to *pixel_data*, and split into
-    ``NUM_CHUNKS`` (16) chunks of ``CHUNK_SIZE`` (4096) bytes each.
+    chunks of ``CHUNK_SIZE`` (4096) bytes each.
 
+    For a single frame this produces ``NUM_CHUNKS`` (16) chunks.
+    For multiple frames the chunk count scales with the data size.
     Unused trailing bytes in the last chunk are padded with 0xFF.
     """
     # Build header
@@ -48,13 +50,22 @@ def rgb565_to_chunks(pixel_data: bytes, frame_count: int = 1) -> list[bytes]:
 
     payload = bytes(header) + pixel_data
 
+    # Calculate chunks needed (ceil division)
+    num_chunks = -(-len(payload) // CHUNK_SIZE)
+
     # Pad to fill all chunks
-    total = NUM_CHUNKS * CHUNK_SIZE
+    total = num_chunks * CHUNK_SIZE
     padded = payload + b"\xFF" * (total - len(payload))
 
-    return [padded[i * CHUNK_SIZE : (i + 1) * CHUNK_SIZE] for i in range(NUM_CHUNKS)]
+    return [padded[i * CHUNK_SIZE : (i + 1) * CHUNK_SIZE] for i in range(num_chunks)]
 
 
 def render_to_chunks(img: Image.Image) -> list[bytes]:
-    """Convenience: convert an image to RGB565 and return wire-ready chunks."""
+    """Convenience: convert a single image to RGB565 and return wire-ready chunks."""
     return rgb565_to_chunks(image_to_rgb565(img))
+
+
+def render_frames_to_chunks(frames: list[Image.Image]) -> list[bytes]:
+    """Convert multiple animation frames to RGB565 and return wire-ready chunks."""
+    pixel_data = b"".join(image_to_rgb565(f) for f in frames)
+    return rgb565_to_chunks(pixel_data, frame_count=len(frames))

@@ -86,8 +86,9 @@ class TestSendCommand:
 
         cmd_dev = MagicMock()
         cmd_dev.get_feature_report.return_value = [0] * FEATURE_REPORT_SIZE
+        data_dev = MagicMock()
 
-        mock_hid.Device.return_value = cmd_dev
+        mock_hid.device.side_effect = [cmd_dev, data_dev]
 
         dev = ND75Device()
         dev._discover()
@@ -106,7 +107,8 @@ class TestSendCommand:
     @patch("nd75_screen.hid.hid")
     def test_send_command_rejects_non_whitelisted(self, mock_hid):
         mock_hid.enumerate.return_value = _standard_enumerate_result()
-        mock_hid.Device.return_value = MagicMock()
+        data_dev = MagicMock()
+        mock_hid.device.side_effect = [MagicMock(), data_dev]
 
         dev = ND75Device()
         dev._discover()
@@ -132,31 +134,8 @@ class TestUploadImage:
             data_dev = MagicMock()
             data_dev.read.return_value = [0] * 64  # ACK
 
-        def device_factory():
-            d = MagicMock()
-            return d
-
-        # We need _open to create two hid.Device instances opened by path
-        devices = {FAKE_CMD_PATH: cmd_dev, FAKE_DATA_PATH: data_dev}
-
-        def open_side_effect(path):
-            dev = MagicMock()
-            return devices.get(path, dev)
-
-        # hid.Device() is constructed then .open(path) is called
-        # OR device is opened via hid.Device(path=...)
-        # We'll mock so that hid.Device returns a mock whose open sets it up
-        created_devices = []
-
-        def device_constructor(*args, **kwargs):
-            if "path" in kwargs:
-                return devices[kwargs["path"]]
-            d = MagicMock()
-            created_devices.append(d)
-            d.open_path = lambda p: None  # no-op
-            return d
-
-        mock_hid.Device.side_effect = device_constructor
+        # hid.device() is called twice: first for cmd, then for data
+        mock_hid.device.side_effect = [cmd_dev, data_dev]
 
         return cmd_dev, data_dev
 
@@ -226,17 +205,14 @@ class TestUploadImage:
         with pytest.raises(AckTimeoutError):
             dev.upload_image(chunks)
 
-    # 8. upload_image() rejects wrong chunk count
+    # 8. upload_image() rejects empty chunks
     @patch("nd75_screen.hid.hid")
-    def test_upload_rejects_wrong_chunk_count(self, mock_hid):
+    def test_upload_rejects_empty_chunks(self, mock_hid):
         mock_hid.enumerate.return_value = _standard_enumerate_result()
 
         dev = ND75Device()
-        with pytest.raises(ValueError, match="16"):
-            dev.upload_image([b"\x00" * CHUNK_SIZE] * 10)
-
-        with pytest.raises(ValueError, match="16"):
-            dev.upload_image([b"\x00" * CHUNK_SIZE] * 17)
+        with pytest.raises(ValueError, match="empty"):
+            dev.upload_image([])
 
     # 9. Device re-discovery on HID errors
     @patch("nd75_screen.hid.hid")
@@ -269,7 +245,7 @@ class TestContextManager:
     def test_context_manager(self, mock_hid):
         mock_hid.enumerate.return_value = _standard_enumerate_result()
         mock_dev = MagicMock()
-        mock_hid.Device.side_effect = lambda *a, **kw: mock_dev
+        mock_hid.device.return_value = mock_dev
 
         with ND75Device() as dev:
             assert isinstance(dev, ND75Device)
@@ -298,8 +274,7 @@ class TestFinalizeFailure:
 
         # Wire up
         mock_hid.enumerate.return_value = _standard_enumerate_result()
-        devices = {FAKE_CMD_PATH: cmd_dev, FAKE_DATA_PATH: data_dev}
-        mock_hid.Device.side_effect = lambda *a, **kw: devices.get(kw.get("path"))
+        mock_hid.device.side_effect = [cmd_dev, data_dev]
 
         dev = ND75Device()
         chunks = [b"\x00" * CHUNK_SIZE for _ in range(NUM_CHUNKS)]
