@@ -50,6 +50,29 @@ Chunk 15 (last):
 Total pixel data capacity: 3840 + (14 * 4096) + 4096 = 65,280 bytes
 Actual pixel data: 64,800 bytes -> 480 bytes of 0xFF padding in last chunk
 
+## Multi-Frame Animation
+
+The firmware natively animates multi-frame uploads. Header byte[0] specifies the frame count; pixel data for all frames is packed sequentially after the 256-byte header.
+
+```
+Header byte[0] = N (frame count)
+Header bytes[1:256] = 0xFF
+Frame 0 pixel data (64,800 bytes)
+Frame 1 pixel data (64,800 bytes)
+...
+Frame N-1 pixel data (64,800 bytes)
+```
+
+Chunk count scales dynamically: `ceil((256 + 64800 * N) / 4096)`
+
+| Frames | Pixel Data | Total Payload | Chunks |
+|--------|-----------|---------------|--------|
+| 1 | 64,800 | 65,056 | 16 |
+| 4 | 259,200 | 259,456 | 64 |
+| 8 | 518,400 | 518,656 | 127 |
+
+Use `render_frames_to_chunks(list_of_images)` for multi-frame, or `render_to_chunks(single_image)` for static.
+
 ## Image Preprocessing
 
 Input images are:
