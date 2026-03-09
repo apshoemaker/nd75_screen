@@ -42,6 +42,8 @@ uv run python -m nd75_screen.cli.weather | uv run python -m nd75_screen.cli.push
 cat photo.png | uv run python -m nd75_screen.cli.push
 uv run python -m nd75_screen.cli.push photo.png
 uv run python -m nd75_screen.cli.weather > /tmp/weather.gif
+# Generate an animated GIF from an LLM prompt
+uv run python -m nd75_screen.cli.llm "neon synthwave sunset over a city" > /tmp/llm.gif
 ```
 
 ## 🛠️ CLI Options
@@ -75,6 +77,13 @@ cat photo.png           ──→ PNG bytes ──→ nd75_screen.cli.push ─�
 | `-s`, `--station ICAO` | Airport code (auto-detected if omitted) |
 | `-u`, `--units` | `imperial` or `metric` (default: imperial) |
 | `--frames N` | Number of animation frames (default: 8) |
+
+**`nd75_screen.cli.llm`** (producer) options:
+
+| Flag | Description |
+|------|-------------|
+| `prompt` | Natural language prompt for the animation |
+| `--model` | Anthropic model id (default: `claude-3-7-sonnet-latest`) |
 
 **`nd75_screen.cli.push`** (consumer) options:
 
