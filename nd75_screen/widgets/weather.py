@@ -1,0 +1,1 @@
+"""METAR aviation weather widget."""

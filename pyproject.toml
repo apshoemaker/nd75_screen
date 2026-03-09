@@ -1,0 +1,20 @@
+[project]
+name = "nd75-screen"
+version = "0.1.0"
+description = "Push custom screens to Chilkey ND75 keyboard LCD"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "hidapi>=0.15.0",
+    "pillow>=12.1.1",
+    "requests>=2.32.5",
+]
+
+[project.scripts]
+nd75-screen = "nd75_screen.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]
