@@ -1,5 +1,7 @@
 """Tests for nd75_screen.renderer — RGB565 conversion and chunking."""
 
+import io
+
 import pytest
 from PIL import Image
 
@@ -11,7 +13,14 @@ from nd75_screen import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
 )
-from nd75_screen.renderer import image_to_rgb565, render_to_chunks, rgb565_to_chunks, render_frames_to_chunks
+from nd75_screen.renderer import (
+    image_to_rgb565,
+    frames_to_gif,
+    read_frames,
+    render_to_chunks,
+    rgb565_to_chunks,
+    render_frames_to_chunks,
+)
 
 
 # ---- RGB565 known-value tests ----
@@ -171,3 +180,44 @@ def test_render_frames_to_chunks():
     # All chunks should be 4096 bytes
     for chunk in chunks:
         assert len(chunk) == CHUNK_SIZE
+
+
+# ---- GIF helpers ----
+
+
+def test_frames_to_gif_produces_valid_gif():
+    """Encoding frames should produce data with GIF magic bytes that PIL can reopen."""
+    frames = [Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (i * 60, 0, 0)) for i in range(4)]
+    buf = io.BytesIO()
+    frames_to_gif(frames, buf)
+    data = buf.getvalue()
+    assert data[:4] == b"GIF8"
+    # PIL should be able to reopen it
+    buf.seek(0)
+    img = Image.open(buf)
+    assert img.n_frames == 4
+
+
+def test_read_frames_gif_roundtrip():
+    """Encode frames to GIF, decode back, verify count and dimensions."""
+    original = [Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (i * 30, 0, 0)) for i in range(6)]
+    buf = io.BytesIO()
+    frames_to_gif(original, buf)
+    buf.seek(0)
+    decoded = read_frames(buf)
+    assert len(decoded) == 6
+    for frame in decoded:
+        assert frame.size == (SCREEN_WIDTH, SCREEN_HEIGHT)
+        assert frame.mode == "RGB"
+
+
+def test_read_frames_single_png():
+    """A single PNG should return a list with one RGB frame."""
+    img = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (128, 128, 128))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    frames = read_frames(buf)
+    assert len(frames) == 1
+    assert frames[0].size == (SCREEN_WIDTH, SCREEN_HEIGHT)
+    assert frames[0].mode == "RGB"

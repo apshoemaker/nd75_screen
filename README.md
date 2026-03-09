@@ -12,6 +12,7 @@ The ND75 has a 135×240 color LCD hidden between the keys. This tool takes it ov
 - 🖼️ **Custom images** — push any PNG/JPG to the screen
 - 🎞️ **Animated icons** — 8 weather types with smooth multi-frame animations (the firmware animates them natively, like a GIF!)
 - 🔄 **Daemon mode** — refreshes weather on a schedule, survives USB reconnects
+- 🔗 **Unix pipes** — composable producer/consumer commands for flexible workflows
 
 ## 🚀 Quick Start
 
@@ -35,6 +36,12 @@ uv run python -m nd75_screen --once -s KJFK
 
 # Push a custom image
 uv run python -m nd75_screen --image my_photo.png
+
+# Unix pipes — composable producer/consumer commands
+uv run python -m nd75_screen.cli.weather | uv run python -m nd75_screen.cli.push
+cat photo.png | uv run python -m nd75_screen.cli.push
+uv run python -m nd75_screen.cli.push photo.png
+uv run python -m nd75_screen.cli.weather > /tmp/weather.gif
 ```
 
 ## 🛠️ CLI Options
@@ -49,6 +56,32 @@ uv run python -m nd75_screen --image my_photo.png
 | `--sync-time` | Sync keyboard clock and exit |
 | `--no-time-sync` | Skip auto time sync on startup |
 | `-v`, `--verbose` | Show debug logging |
+
+## 🔗 Unix Pipes
+
+Content production is decoupled from device push — any program that outputs a PNG or GIF can pipe into the push command:
+
+```
+PRODUCER (stdout)              PIPE         CONSUMER (stdin)
+─────────────────              ────         ────────────────
+nd75_screen.cli.weather ──→ GIF bytes ──→ nd75_screen.cli.push ──→ HID upload
+cat photo.png           ──→ PNG bytes ──→ nd75_screen.cli.push ──→ HID upload
+```
+
+**`nd75_screen.cli.weather`** (producer) options:
+
+| Flag | Description |
+|------|-------------|
+| `-s`, `--station ICAO` | Airport code (auto-detected if omitted) |
+| `-u`, `--units` | `imperial` or `metric` (default: imperial) |
+| `--frames N` | Number of animation frames (default: 8) |
+
+**`nd75_screen.cli.push`** (consumer) options:
+
+| Flag | Description |
+|------|-------------|
+| `[file]` | Image file path (reads stdin if omitted) |
+| `--sync-time` | Sync keyboard clock before pushing |
 
 ## 🌡️ Weather Display
 
@@ -87,7 +120,7 @@ Time sync was reverse-engineered from the [official web configurator](https://nd
 ## 🧪 Development
 
 ```bash
-uv run pytest tests/ -v    # 65 tests, all mocked — no hardware needed
+uv run pytest tests/ -v    # 76 tests, all mocked — no hardware needed
 ```
 
 ## 📄 License

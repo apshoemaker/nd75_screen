@@ -12,6 +12,8 @@ dependencies = [
 
 [project.scripts]
 nd75-screen = "nd75_screen.__main__:main"
+nd75-weather = "nd75_screen.cli.weather:main"
+nd75-push = "nd75_screen.cli.push:main"
 
 [dependency-groups]
 dev = [
