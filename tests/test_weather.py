@@ -11,7 +11,11 @@ from nd75_screen.widgets.weather import (
     render_weather,
     render_weather_frames,
     render_error_screen,
+    _geolocate,
+    detect_station,
+    _cached_station,
 )
+import nd75_screen.widgets.weather as weather_module
 
 
 # ---- fetch_metar ----
@@ -170,3 +174,107 @@ def test_render_error_screen_returns_correct_image():
     assert isinstance(img, Image.Image)
     assert img.size == (SCREEN_WIDTH, SCREEN_HEIGHT)
     assert img.mode == "RGB"
+
+
+# ---- _geolocate ----
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_geolocate_returns_lat_lon(mock_get):
+    """_geolocate returns (lat, lon) on successful IP lookup."""
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_response.json.return_value = {"lat": 29.98, "lon": -95.34}
+    mock_get.return_value = mock_response
+
+    lat, lon = _geolocate()
+    assert lat == 29.98
+    assert lon == -95.34
+    mock_get.assert_called_once_with("http://ip-api.com/json", timeout=5)
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_geolocate_raises_on_network_error(mock_get):
+    """_geolocate raises WeatherFetchError on network failure."""
+    mock_get.side_effect = Exception("Connection refused")
+
+    with pytest.raises(WeatherFetchError, match="IP geolocation failed"):
+        _geolocate()
+
+
+# ---- detect_station ----
+
+
+@pytest.fixture(autouse=True)
+def _clear_station_cache():
+    """Clear the cached station before each test."""
+    weather_module._cached_station = None
+    yield
+    weather_module._cached_station = None
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_detect_station_finds_closest(mock_get):
+    """detect_station picks the closest station from bbox results."""
+    geo_response = Mock()
+    geo_response.raise_for_status = Mock()
+    geo_response.json.return_value = {"lat": 29.98, "lon": -95.34}
+
+    bbox_response = Mock()
+    bbox_response.raise_for_status = Mock()
+    bbox_response.json.return_value = [
+        {"icaoId": "KIAH", "lat": 29.99, "lon": -95.34},
+        {"icaoId": "KHOU", "lat": 29.64, "lon": -95.28},
+    ]
+
+    mock_get.side_effect = [geo_response, bbox_response]
+
+    result = detect_station()
+    assert result == "KIAH"
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_detect_station_returns_fallback_on_failure(mock_get):
+    """detect_station returns the fallback when geolocation fails."""
+    mock_get.side_effect = Exception("Network error")
+
+    result = detect_station(fallback="KJFK")
+    assert result == "KJFK"
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_detect_station_returns_fallback_on_empty_bbox(mock_get):
+    """detect_station returns fallback when no stations in bounding box."""
+    geo_response = Mock()
+    geo_response.raise_for_status = Mock()
+    geo_response.json.return_value = {"lat": 0.0, "lon": 0.0}
+
+    bbox_response = Mock()
+    bbox_response.raise_for_status = Mock()
+    bbox_response.json.return_value = []
+
+    mock_get.side_effect = [geo_response, bbox_response]
+
+    result = detect_station()
+    assert result == "KIAH"
+
+
+@patch("nd75_screen.widgets.weather.requests.get")
+def test_detect_station_caches_result(mock_get):
+    """detect_station caches the result; second call doesn't hit network."""
+    geo_response = Mock()
+    geo_response.raise_for_status = Mock()
+    geo_response.json.return_value = {"lat": 29.98, "lon": -95.34}
+
+    bbox_response = Mock()
+    bbox_response.raise_for_status = Mock()
+    bbox_response.json.return_value = [
+        {"icaoId": "KIAH", "lat": 29.99, "lon": -95.34},
+    ]
+
+    mock_get.side_effect = [geo_response, bbox_response]
+
+    result1 = detect_station()
+    result2 = detect_station()
+    assert result1 == result2 == "KIAH"
+    assert mock_get.call_count == 2  # only the first call hits network

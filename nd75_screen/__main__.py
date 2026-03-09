@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> None:
         description="Push custom screens to Chilkey ND75 keyboard LCD",
     )
     parser.add_argument(
-        "-s", "--station", default="KIAH", help="ICAO station code (default: KIAH)"
+        "-s", "--station", default=None, help="ICAO station code (auto-detected if omitted)"
     )
     parser.add_argument(
         "-i", "--interval", type=int, default=300, help="Refresh interval in seconds (default: 300)"

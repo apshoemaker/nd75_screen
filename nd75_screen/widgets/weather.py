@@ -1,5 +1,6 @@
 """METAR aviation weather widget."""
 
+import logging
 import math
 import textwrap
 
@@ -8,7 +9,70 @@ from PIL import Image, ImageDraw
 
 from nd75_screen import SCREEN_WIDTH, SCREEN_HEIGHT, WeatherFetchError
 
+log = logging.getLogger(__name__)
+
 NUM_ANIM_FRAMES = 8
+
+_cached_station: str | None = None
+
+
+def _geolocate() -> tuple[float, float]:
+    """Get approximate lat/lon from IP geolocation.
+
+    Raises:
+        WeatherFetchError: On network or parsing failure.
+    """
+    try:
+        resp = requests.get("http://ip-api.com/json", timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        return (data["lat"], data["lon"])
+    except Exception as exc:
+        raise WeatherFetchError(f"IP geolocation failed: {exc}") from exc
+
+
+def detect_station(fallback: str = "KIAH") -> str:
+    """Auto-detect the nearest METAR-reporting airport station.
+
+    Uses IP geolocation to find the user's approximate location, then queries
+    aviationweather.gov for nearby stations. Caches the result for the session.
+
+    Args:
+        fallback: Station code to return if detection fails.
+
+    Returns:
+        ICAO station code string.
+    """
+    global _cached_station
+    if _cached_station is not None:
+        return _cached_station
+
+    try:
+        lat, lon = _geolocate()
+        bbox = f"{lat - 0.5},{lon - 0.5},{lat + 0.5},{lon + 0.5}"
+        url = f"https://aviationweather.gov/api/data/metar?bbox={bbox}&format=json"
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        stations = resp.json()
+
+        if not stations:
+            log.warning("No METAR stations found near %.2f, %.2f; using fallback %s", lat, lon, fallback)
+            _cached_station = fallback
+            return fallback
+
+        # Pick closest by Euclidean distance
+        def dist(s):
+            return (s.get("lat", 0) - lat) ** 2 + (s.get("lon", 0) - lon) ** 2
+
+        closest = min(stations, key=dist)
+        station = closest.get("icaoId", fallback)
+        log.info("Auto-detected nearest station: %s", station)
+        _cached_station = station
+        return station
+    except Exception:
+        log.warning("Station auto-detect failed; using fallback %s", fallback, exc_info=True)
+        _cached_station = fallback
+        return fallback
 
 
 def fetch_metar(station: str) -> dict:

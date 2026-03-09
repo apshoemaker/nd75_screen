@@ -8,13 +8,13 @@ import threading
 from nd75_screen import ND75Error, WeatherFetchError
 from nd75_screen.hid import ND75Device
 from nd75_screen.renderer import render_to_chunks, render_frames_to_chunks
-from nd75_screen.widgets.weather import fetch_metar, render_weather_frames, render_error_screen
+from nd75_screen.widgets.weather import fetch_metar, render_weather_frames, render_error_screen, detect_station
 
 log = logging.getLogger(__name__)
 
 
 def run_loop(
-    station: str,
+    station: str | None,
     interval: int,
     units: str,
     stop_event: threading.Event,
@@ -22,11 +22,17 @@ def run_loop(
     """Run the weather refresh loop until *stop_event* is set.
 
     Args:
-        station: ICAO airport code.
+        station: ICAO airport code, or None to auto-detect.
         interval: Seconds between refreshes.
         units: "imperial" or "metric".
         stop_event: Set this to stop the loop.
     """
+    if station is None:
+        station = detect_station()
+        log.info("Using auto-detected station: %s", station)
+    else:
+        log.info("Using station: %s", station)
+
     cached_chunks: list[bytes] | None = None
 
     with ND75Device() as device:
