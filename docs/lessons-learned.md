@@ -34,3 +34,11 @@ On macOS, hidapi's `send_feature_report(data)` checks `data[0]`: if it's `0x00`,
 3. Wire into `daemon.py` and `__main__.py` with a CLI flag
 4. Pipeline: `render_frames_to_chunks(frames)` -> `device.upload_image(chunks)`
 5. For static widgets, `render_to_chunks(single_image)` still works
+
+## Unix pipe architecture
+
+Producers and consumers are decoupled via standard image formats (PNG for stills, GIF for animations). Producers output to stdout, consumers read from stdin — no knowledge of HID, RGB565, or chunks leaks into producers.
+
+- `[project.scripts]` entry points didn't work with `uv run` — use `python -m nd75_screen.cli.weather` / `python -m nd75_screen.cli.push` instead
+- GIF/PNG interchange format is ~50-100 KB for an 8-frame 135×240 animation — negligible overhead vs. leaking RGB565 into every producer
+- `renderer.py` has `frames_to_gif()` and `read_frames()` for the interchange format; `read_frames()` auto-detects PNG vs GIF via Pillow

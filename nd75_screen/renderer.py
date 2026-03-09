@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import struct
 
-from PIL import Image
+from PIL import Image, ImageSequence
 
 from nd75_screen import (
     CHUNK_SIZE,
@@ -69,3 +69,18 @@ def render_frames_to_chunks(frames: list[Image.Image]) -> list[bytes]:
     """Convert multiple animation frames to RGB565 and return wire-ready chunks."""
     pixel_data = b"".join(image_to_rgb565(f) for f in frames)
     return rgb565_to_chunks(pixel_data, frame_count=len(frames))
+
+
+def frames_to_gif(frames: list[Image.Image], fp) -> None:
+    """Write frames as animated GIF to file-like object *fp*."""
+    frames[0].save(
+        fp, format="GIF", save_all=True, append_images=frames[1:], loop=0,
+    )
+
+
+def read_frames(fp) -> list[Image.Image]:
+    """Read PNG or animated GIF from file-like object, return list of RGB frames."""
+    img = Image.open(fp)
+    if getattr(img, "n_frames", 1) > 1:
+        return [frame.copy().convert("RGB") for frame in ImageSequence.Iterator(img)]
+    return [img.convert("RGB")]
