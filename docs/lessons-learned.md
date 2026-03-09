@@ -23,6 +23,10 @@ The LCD firmware natively animates multi-frame uploads. Header byte[0] = frame c
 - Device paths change on USB reconnect — always re-enumerate
 - May need Input Monitoring permission in System Settings for HID access
 
+## hidapi report ID 0x00 gotcha (macOS)
+
+On macOS, hidapi's `send_feature_report(data)` checks `data[0]`: if it's `0x00`, it strips that byte before sending (treating it as "no report ID"), so the device receives `data[1:]`. Commands use `data[0]=0x04` and are unaffected. The time sync payload uses report ID `0x00`, so you must send a **65-byte** buffer (`[0x00, ...64 data bytes...]`) to compensate for the stripped byte. This caused silent time sync failures until diagnosed — the payload arrived one byte short and shifted. See `hid.py:sync_time()` and `docs/protocol.md` for details.
+
 ## Adding a new widget
 
 1. Create `nd75_screen/widgets/your_widget.py` with `render_*_frames(data) -> list[Image]`

@@ -1,5 +1,6 @@
 """Tests for nd75_screen.hid — USB HID communication with ND75 keyboard."""
 
+import datetime
 from unittest.mock import patch, MagicMock, call
 import pytest
 
@@ -284,3 +285,105 @@ class TestFinalizeFailure:
             dev.upload_image(chunks)  # should NOT raise
 
         assert any("finalize" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# 12. sync_time() sends correct protocol sequence
+# ---------------------------------------------------------------------------
+
+class TestSyncTime:
+    def _setup_device(self, mock_hid, cmd_dev=None, data_dev=None):
+        mock_hid.enumerate.return_value = _standard_enumerate_result()
+        if cmd_dev is None:
+            cmd_dev = MagicMock()
+            cmd_dev.get_feature_report.return_value = [0] * FEATURE_REPORT_SIZE
+        if data_dev is None:
+            data_dev = MagicMock()
+        mock_hid.device.side_effect = [cmd_dev, data_dev]
+        return cmd_dev, data_dev
+
+    @patch("nd75_screen.hid.hid")
+    def test_sync_time_sends_correct_sequence(self, mock_hid):
+        cmd_dev, _ = self._setup_device(mock_hid)
+
+        dev = ND75Device()
+        dt = datetime.datetime(2026, 3, 9, 14, 30, 45)  # Sunday
+        dev.sync_time(dt)
+
+        calls = cmd_dev.send_feature_report.call_args_list
+        # 4 feature reports: start(0x18), initiate(0x28), time payload, finalize(0x02)
+        assert len(calls) == 4
+
+        # Start session
+        assert calls[0][0][0][1] == 0x18
+        # Initiate time command
+        assert calls[1][0][0][1] == 0x28
+        # Finalize
+        assert calls[3][0][0][1] == 0x02
+
+    @patch("nd75_screen.hid.hid")
+    def test_sync_time_payload_format(self, mock_hid):
+        cmd_dev, _ = self._setup_device(mock_hid)
+
+        dev = ND75Device()
+        # 2026-03-09 14:30:45, March 9 2026 is Monday
+        dt = datetime.datetime(2026, 3, 9, 14, 30, 45)
+        dev.sync_time(dt)
+
+        # Third call is the raw time payload (65 bytes: report ID + 64 data)
+        payload = cmd_dev.send_feature_report.call_args_list[2][0][0]
+        assert len(payload) == FEATURE_REPORT_SIZE + 1
+        assert payload[0] == 0x00    # report ID (stripped by hidapi on macOS)
+        assert payload[1] == 0x00    # data byte 0
+        assert payload[2] == 0x01    # data byte 1
+        assert payload[3] == 0x5A    # time sync marker
+        assert payload[4] == 26      # year % 100
+        assert payload[5] == 3       # month
+        assert payload[6] == 9       # day
+        assert payload[7] == 14      # hour
+        assert payload[8] == 30      # minute
+        assert payload[9] == 45      # second
+        assert payload[10] == 0x00
+        # Monday: Python weekday()=0, firmware=(0+1)%7=1
+        assert payload[11] == 1
+        assert payload[63] == 0xAA
+        assert payload[64] == 0x55
+
+    @patch("nd75_screen.hid.hid")
+    def test_sync_time_sunday_is_zero(self, mock_hid):
+        """Sunday should map to 0 in firmware's day-of-week."""
+        cmd_dev, _ = self._setup_device(mock_hid)
+
+        dev = ND75Device()
+        # 2026-03-08 is a Sunday (weekday()=6)
+        dt = datetime.datetime(2026, 3, 8, 12, 0, 0)
+        dev.sync_time(dt)
+
+        payload = cmd_dev.send_feature_report.call_args_list[2][0][0]
+        # Sunday: Python weekday()=6, firmware=(6+1)%7=0
+        # payload[11] because payload[0] is the report ID byte
+        assert payload[11] == 0
+
+    @patch("nd75_screen.hid.hid")
+    def test_sync_time_defaults_to_now(self, mock_hid):
+        """sync_time() without args uses current time."""
+        cmd_dev, _ = self._setup_device(mock_hid)
+
+        dev = ND75Device()
+        dev.sync_time()
+
+        # Should have sent 4 feature reports without error
+        assert cmd_dev.send_feature_report.call_count == 4
+
+    @patch("nd75_screen.hid.hid")
+    def test_sync_time_closes_on_os_error(self, mock_hid):
+        """sync_time raises TransferError and closes devices on OSError."""
+        cmd_dev, _ = self._setup_device(mock_hid)
+        cmd_dev.send_feature_report.side_effect = OSError("HID write failed")
+
+        dev = ND75Device()
+        with pytest.raises(TransferError):
+            dev.sync_time()
+
+        assert dev._cmd_dev is None
+        assert dev._data_dev is None

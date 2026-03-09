@@ -5,10 +5,12 @@ Push custom screens to Chilkey ND75 keyboard LCD (135x240, RGB565).
 > **For coding agents:** Treat this file as a table of contents. Dive into `docs/` for details as needed — don't load everything up front.
 
 ```bash
-uv run pytest tests/ -v                     # Run all tests (54)
-uv run python -m nd75_screen --help          # CLI help
-uv run python -m nd75_screen --once -s KIAH  # Push weather once
-uv run python -m nd75_screen -s KIAH -i 300  # Start daemon
+uv run pytest tests/ -v                          # Run all tests (65)
+uv run python -m nd75_screen --help               # CLI help
+uv run python -m nd75_screen --once -v            # Auto-detect station, sync time, push weather once
+uv run python -m nd75_screen --once -s KJFK -v    # Explicit station override
+uv run python -m nd75_screen --sync-time -v       # Sync keyboard clock only
+uv run python -m nd75_screen -i 300               # Start daemon (auto-detect, auto-sync)
 ```
 
 ## Project Structure

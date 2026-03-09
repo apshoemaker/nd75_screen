@@ -37,6 +37,12 @@ def main(argv: list[str] | None = None) -> None:
         "--image", type=str, help="Push a raw image file (bypass widget)"
     )
     parser.add_argument(
+        "--sync-time", action="store_true", help="Sync keyboard clock to system time and exit"
+    )
+    parser.add_argument(
+        "--no-time-sync", action="store_true", help="Skip automatic time sync on startup"
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
@@ -47,12 +53,27 @@ def main(argv: list[str] | None = None) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    log = logging.getLogger(__name__)
+
+    if args.sync_time:
+        with ND75Device() as device:
+            device.sync_time()
+        return
+
     if args.image:
         img = Image.open(args.image)
         chunks = render_to_chunks(img)
         with ND75Device() as device:
             device.upload_image(chunks)
         return
+
+    # Auto-sync time on startup unless disabled
+    if not args.no_time_sync:
+        try:
+            with ND75Device() as device:
+                device.sync_time()
+        except Exception:
+            log.warning("Time sync failed; continuing without it", exc_info=True)
 
     stop_event = threading.Event()
 

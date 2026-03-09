@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
+import time
 
 import hid
 
@@ -171,3 +173,60 @@ class ND75Device:
         except OSError as exc:
             self.close()
             raise TransferError(f"HID transfer failed: {exc}") from exc
+
+    def sync_time(self, dt: datetime.datetime | None = None) -> None:
+        """Synchronize the keyboard's clock to the given datetime.
+
+        Args:
+            dt: Datetime to set. Defaults to now (local time).
+        """
+        if dt is None:
+            dt = datetime.datetime.now()
+
+        # Lazy open
+        if self._cmd_dev is None or self._data_dev is None:
+            self._discover()
+            self._open()
+
+        # Build time payload: 65 bytes = 1 report-ID byte + 64 data bytes.
+        # hidapi on macOS strips data[0] when it's 0x00 (report ID = 0),
+        # so we prepend an extra 0x00 so the remaining 64 bytes are correct.
+        payload = bytearray(FEATURE_REPORT_SIZE + 1)
+        payload[0] = 0x00   # report ID (stripped by hidapi on macOS)
+        payload[1] = 0x00   # data byte 0
+        payload[2] = 0x01   # data byte 1
+        payload[3] = 0x5A   # data byte 2 — time sync marker
+        payload[4] = dt.year % 100
+        payload[5] = dt.month
+        payload[6] = dt.day
+        payload[7] = dt.hour
+        payload[8] = dt.minute
+        payload[9] = dt.second
+        payload[10] = 0x00
+        payload[11] = (dt.weekday() + 1) % 7  # Python: Mon=0, firmware: Sun=0
+        payload[63] = 0xAA
+        payload[64] = 0x55
+
+        try:
+            # Start session
+            self._send_command(0x18)
+            time.sleep(0.005)
+
+            # Initiate time command (0x28) with count=1
+            self._send_command(0x28, bytes([0, 0, 0, 0, 0, 0, 1]))
+            time.sleep(0.005)
+
+            # Send time payload as feature report
+            self._cmd_dev.send_feature_report(bytes(payload))
+            time.sleep(0.005)
+            self._cmd_dev.get_feature_report(REPORT_PREFIX, FEATURE_REPORT_SIZE)
+            time.sleep(0.020)
+
+            # End session
+            self._send_command(0x02)
+
+            log.info("Time synced to %s", dt.strftime("%Y-%m-%d %H:%M:%S"))
+
+        except OSError as exc:
+            self.close()
+            raise TransferError(f"Time sync failed: {exc}") from exc
