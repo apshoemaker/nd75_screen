@@ -13,6 +13,7 @@ The ND75 has a 135×240 color LCD hidden between the keys. This tool takes it ov
 - 🎞️ **Animated icons** — 8 weather types with smooth multi-frame animations (the firmware animates them natively, like a GIF!)
 - 🔄 **Daemon mode** — refreshes weather on a schedule, survives USB reconnects
 - 🔗 **Unix pipes** — composable producer/consumer commands for flexible workflows
+- 🤖 **LLM GIF generation** — create ND75-ready GIFs from a text prompt with Anthropic Sonnet
 
 ## 🚀 Quick Start
 
@@ -42,6 +43,7 @@ uv run python -m nd75_screen.cli.weather | uv run python -m nd75_screen.cli.push
 cat photo.png | uv run python -m nd75_screen.cli.push
 uv run python -m nd75_screen.cli.push photo.png
 uv run python -m nd75_screen.cli.weather > /tmp/weather.gif
+uv run nd75-llm-gif "neon synthwave sunset over a city" | uv run python -m nd75_screen.cli.push
 ```
 
 ## 🛠️ CLI Options
@@ -82,6 +84,14 @@ cat photo.png           ──→ PNG bytes ──→ nd75_screen.cli.push ─�
 |------|-------------|
 | `[file]` | Image file path (reads stdin if omitted) |
 | `--sync-time` | Sync keyboard clock before pushing |
+
+**`nd75-llm-gif`** (producer) options:
+
+| Flag | Description |
+|------|-------------|
+| `prompt` | Natural-language animation description |
+| `--model MODEL` | Anthropic model name (default: `claude-sonnet-4-5`) |
+| `--api-key KEY` | Anthropic API key (defaults to `ANTHROPIC_API_KEY`) |
 
 ## 🌡️ Weather Display
 
