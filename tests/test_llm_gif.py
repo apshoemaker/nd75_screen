@@ -34,8 +34,10 @@ def test_generate_gif_parses_fenced_json_with_prose():
                 type="text",
                 text=(
                     "Here you go!\n```json\n"
-                    '{"frames": ["neon skyline", "pink sun"]}\n'
-                    "```"
+                    '{"frames": ['
+                    '{"bg":[0,0,40],"shapes":[{"type":"rect","xy":[0,200,135,240],"fill":[255,80,180]}]},'
+                    '{"bg":[20,0,60],"shapes":[{"type":"ellipse","xy":[40,30,95,85],"fill":[255,200,0]}]}'
+                    "]}\n```"
                 ),
             )
         ]
@@ -57,7 +59,10 @@ def test_generate_gif_uses_first_available_text_block():
     response = SimpleNamespace(
         content=[
             SimpleNamespace(type="thinking", text="internal"),
-            SimpleNamespace(type="text", text='{"frames": ["frame one"]}'),
+            SimpleNamespace(
+                type="text",
+                text='{"frames": [{"bg":[0,0,0],"shapes":[{"type":"rect","xy":[0,0,135,240],"fill":[255,0,0]}]}]}',
+            ),
         ]
     )
     client = _FakeClient(response)

@@ -14,10 +14,13 @@ from nd75_screen.renderer import frames_to_gif
 DEFAULT_MODEL = "claude-3-7-sonnet-latest"
 
 SYSTEM_PROMPT = (
-    "You create concise storyboard JSON for tiny keyboard LCD animations. "
-    "Respond with JSON only using this shape: "
-    '{"frames": ["frame description", "frame description"]}. '
-    "Return 1-8 short frame descriptions."
+    f"You create JSON drawing commands for a tiny {SCREEN_WIDTH}x{SCREEN_HEIGHT} keyboard LCD. "
+    "Return RAW JSON only — no code fences, no prose. Shape:\n"
+    '{"frames": [{"bg": [r,g,b], "shapes": [...]}]}\n'
+    "Shape types: rect, ellipse, line, text. Each has xy:[x1,y1,x2,y2], fill:[r,g,b]. "
+    "Lines have width:N. Text has text:str and xy:[x,y].\n"
+    "Return 2-4 frames. Keep each frame to 5-10 shapes MAX. Use vivid colors. "
+    f"All coords must fit {SCREEN_WIDTH}x{SCREEN_HEIGHT}. Be concise."
 )
 
 
@@ -51,27 +54,74 @@ def _extract_json_payload(raw: str) -> Any:
     raise ValueError("Could not find valid JSON payload in LLM response text")
 
 
-def _parse_storyboard(raw: str) -> list[str]:
+def _parse_storyboard(raw: str) -> list[dict]:
     payload = _extract_json_payload(raw)
 
+    frames: list = []
     if isinstance(payload, dict):
+        # Try "frames" key first, then fall back to any list-valued key
         frames = payload.get("frames", [])
+        if not frames:
+            for v in payload.values():
+                if isinstance(v, list) and v:
+                    frames = v
+                    break
+        # If the dict itself looks like a single frame (has "bg" or "shapes"), wrap it
+        if not frames and ("bg" in payload or "shapes" in payload):
+            frames = [payload]
     elif isinstance(payload, list):
         frames = payload
     else:
         raise ValueError("Storyboard JSON must be an object or array")
 
-    cleaned = [str(frame).strip() for frame in frames if str(frame).strip()]
+    if not frames:
+        raise ValueError(
+            f"Storyboard JSON must contain at least one frame. Got: {raw[:300]}"
+        )
+
+    cleaned: list[dict] = []
+    for frame in frames[:8]:
+        if isinstance(frame, str):
+            # Legacy text-only format: render as text on dark background
+            cleaned.append({"bg": [8, 8, 20], "shapes": [
+                {"type": "text", "xy": [8, 12], "text": frame[:120], "fill": [210, 245, 255]},
+            ]})
+        elif isinstance(frame, dict):
+            cleaned.append(frame)
+        else:
+            continue
     if not cleaned:
         raise ValueError("Storyboard JSON must contain at least one frame")
-    return cleaned[:8]
+    return cleaned
 
 
-def _render_frame(text: str) -> Image.Image:
-    image = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), (8, 8, 20))
+def _to_tuple(val: Any) -> tuple:
+    """Convert a list/tuple to a tuple, for use as Pillow color/coord args."""
+    if isinstance(val, (list, tuple)):
+        return tuple(int(v) for v in val)
+    return val
+
+
+def _render_frame(frame: dict) -> Image.Image:
+    bg = _to_tuple(frame.get("bg", [0, 0, 0]))
+    image = Image.new("RGB", (SCREEN_WIDTH, SCREEN_HEIGHT), bg)
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1), outline=(255, 80, 180), width=2)
-    draw.text((8, 12), text[:120], fill=(210, 245, 255))
+
+    for shape in frame.get("shapes", []):
+        stype = shape.get("type", "")
+        xy = _to_tuple(shape.get("xy", [0, 0, 0, 0]))
+        fill = _to_tuple(shape.get("fill", [255, 255, 255]))
+
+        if stype == "rect":
+            draw.rectangle(xy, fill=fill)
+        elif stype == "ellipse":
+            draw.ellipse(xy, fill=fill)
+        elif stype == "line":
+            width = int(shape.get("width", 1))
+            draw.line(xy, fill=fill, width=width)
+        elif stype == "text":
+            draw.text(xy[:2] if len(xy) > 2 else xy, shape.get("text", ""), fill=fill)
+
     return image
 
 
@@ -84,7 +134,7 @@ def generate_gif_bytes_from_prompt(prompt: str, model: str = DEFAULT_MODEL, clie
 
     response = client.messages.create(
         model=model,
-        max_tokens=600,
+        max_tokens=4096,
         temperature=0.2,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],

@@ -18,9 +18,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("prompt", help="Natural language prompt for the animation")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Anthropic model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--api-key", default=None, help="Anthropic API key (default: $ANTHROPIC_API_KEY)")
     args = parser.parse_args(argv)
 
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    api_key = args.api_key or os.getenv("ANTHROPIC_API_KEY")
+    client = Anthropic(api_key=api_key)
     gif_data = generate_gif_bytes_from_prompt(args.prompt, model=args.model, client=client)
     sys.stdout.buffer.write(gif_data)
 
